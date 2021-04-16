@@ -1,0 +1,125 @@
+---
+title: "Reproducible Research Project 1"
+author: "Jingqin Luo"
+date: "4/11/2021"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+#knitr::opts_knit$set(root.dir = '//files.wustl.edu/jingqinluo/Reproducible Research')
+knitr::opts_knit$set(root.dir = 'W:/Jingqin/1_ClinicalTools/Reproducible Research/')
+knitr::opts_chunk$set(echo = TRUE,warning=FALSE, message=FALSE,cache=FALSE)
+```
+## Overview
+This is my RR project 1 assignment of analyzing activitiy dataset while using *R* markdown to integrate R code, outputs and texts.  
+
+
+## load in R packages
+```{r load in packages}
+library(RCurl)#for getting url
+library(data.table)
+library(dplyr)
+library(tidyverse)
+sessionInfo()##for reproducibility on R version and Packages
+```
+
+## Read in steps dataset
+The steps data set was downloaded from the *Coursera* [course website](https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip).
+
+```{r read in step dat directly from github,echo=FALSE}
+##try reading from github directly but failed.
+#dat=read.table("https://github.com/rosyluo/RepData_PeerAssessment1/blob/master/activity.zip",sep=",",header=TRUE)#read directly from github
+
+#url0 = getURL("https://github.com/rosyluo/RepData_PeerAssessment1/blob/master/activity.zip")
+#dat = read.csv(text = url0)
+```
+
+```{r read in step dat}
+##if download to local folder
+temp=download.file("https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip", destfile="activity.zip")#reduce manual downloading by directly downloading in R from url 
+#dat=fread("activity.zip",header=T) ##directly read in the zip file return mosaic characters?
+unzip("activity.zip")
+dat=fread("activity.csv",header=T)
+dim(dat)
+str(dat)
+head(dat)
+tail(dat)
+summary(dat)
+```
+## Calculate daily total steps, daily 5 minute interval mean and median and plot historgram
+```{r process data for daily sum}
+daySum = dat %>% group_by(date) %>% summarise(totalSteps=sum(steps,na.rm=T),meanSteps=mean(steps,na.rm=T),medianSteps=median(steps,na.rm=T))
+dim(daySum)
+print(daySum,type="html")
+hist(daySum$totalSteps,bins=20,xlab="daily total steps", main="Histogram of daily total steps")
+```
+
+## Mean and median number of steps taken each day
+The mean and median number of steps taken daily are as below.
+
+```{r summarize daily sum: mean and median}
+mean_median= daySum %>% summarise(mean=mean(totalSteps,na.rm=T),median=median(totalSteps,na.rm=T))
+mean_median
+```
+## Histogram and time series plot of 5-min interval the average number of steps taken
+
+```{r histogram of 5-minute interval steps before data imptuation}
+hist(dat$steps,bins=100,xlab="5-minute steps", main="Histogram of daily total steps before imputation")
+```
+```{r time series plot}
+summary(dat$steps)
+mean0 = mean(dat$steps,na.rm=T)
+plot(steps~date, data=dat,type="l")
+abline(h=mean0, col= "red", lwd=2)
+```
+
+## The 5-minute interval that, on average, contains the maximum number of steps
+```{r time interval with max steps}
+dat[steps==max(steps,na.rm=T),]
+```
+The maximum steps taken in any 5-min interval is `max(steps,na.rm=T)`.
+
+## describe and code a strategy for imputing missing data: using daily mean
+
+```{r count NA}
+count_NA = dat %>% summarise(total=n(), countNA=sum(is.na(steps)),fraction=countNA/total)
+count_NA
+```
+There are `count_NA$countNA` total and  `count_NA$fraction` of 5-min intervals with missing data.
+
+We will simply use the daily mean to impute the missing values in each 5-min interval.
+```{r missing value imputation}
+dayImputed = left_join(dat, daySum, by="date")
+dayImputed$steps[which(is.na(dayImputed$steps))] = dayImputed$meanSteps[which(is.na(dayImputed$steps))]
+head(dayImputed)
+#print(dayImputed,type="html")
+```
+We replot the 5-min interval steps after missing data imputation.
+## Histogram of the total number of steps taken each day after missing values are imputed
+
+```{r histogram of 5-minute interval steps after data imptuation}
+hist(dayImputed$steps,bins=100,xlab="5-minute steps", main="Histogram of daily total steps after imputation")
+```
+## Panel plot comparing the average number of steps taken per 5-minute interval across weekdays and weekends
+
+```{r five minute summary by weekday vs weekend, echo=TRUE}
+dayImputed$weekday = weekdays(dayImputed$date) 
+dayImputed$weekday_flag = with(dayImputed, ifelse(weekday%in%c("Saturday","Sunday"),"weekend","weekday"))
+mean_5minInterval = dayImputed %>% group_by(weekday_flag,interval)%>% summarise(mean=mean(steps,na.rm=T))
+```
+
+```{r panel plot on 5-minute mean inteval by weekday vs. weekend}
+p = ggplot(dat=mean_5minInterval,aes(x=interval,y=mean))+geom_point()+geom_line()+
+    facet_wrap(~weekday_flag)
+p = p + theme_bw()+labs(x="time itnerval",y="averaged steps")+ theme(axis.text=element_text(size=15,face="bold"),axis.title=element_text(size=15,face="bold"),                                         legend.box=NULL,legend.title=element_text(size=15,face="bold"),legend.text=element_text(size=15,face="bold"),                      strip.background=element_rect(fill="white",colour="white"),strip.text=element_text(size=15,face="bold"))
+plot(p)
+```
+As shown in the plots, during weekdays, the peak activities is during the interval 750~1000 only. On weekends, the first activity peak also appeared around 750~1000, but then the activities continued high for some periods from 1000~1750 .   
+```{r extract to Rscript, echo=FALSE, include=FALSE}
+#knit using R
+#knit2html()
+#to extract all the Rcode into a R script file, run in console: 
+#setwd("W:/Jingqin/JosephIppolito/Lung cancer metabolite Sex difference/Rcode")
+#knitr::purl("W:/Jingqin/JosephIppolito/Lung cancer metabolite Sex difference/Rcode/SexSpecificMetaboliteDifferenceLungCancer.Rmd")
+```
